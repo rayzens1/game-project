@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeu Multijoueur</title>
+  <style>
+    /* Zone de jeu */
+    #gameArea {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      border: 1px solid #ccc;
+      margin: 20px auto;
+      background-color: #f0f0f0;
+    }
+    /* Joueurs représentés par des carrés noirs */
+    .player {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background-color: black;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameArea"></div>
+  
+  <!-- Inclusion de Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const gameArea = document.getElementById('gameArea');
+    const players = {};
+
+    // Crée l'élément visuel d'un joueur
+    function createPlayerElement(playerInfo) {
+      const div = document.createElement('div');
+      div.classList.add('player');
+      div.id = playerInfo.id;
+      div.style.left = playerInfo.x + 'px';
+      div.style.top = playerInfo.y + 'px';
+      gameArea.appendChild(div);
+      return div;
+    }
+
+    // Réception de la liste des joueurs existants
+    socket.on('currentPlayers', (currentPlayers) => {
+      Object.keys(currentPlayers).forEach((id) => {
+        const playerInfo = currentPlayers[id];
+        players[id] = createPlayerElement(playerInfo);
+      });
+    });
+
+    // Lorsqu'un nouveau joueur se connecte
+    socket.on('newPlayer', (playerInfo) => {
+      players[playerInfo.id] = createPlayerElement(playerInfo);
+    });
+
+    // Mise à jour de la position d'un joueur
+    socket.on('playerMoved', (playerInfo) => {
+      if (players[playerInfo.id]) {
+        players[playerInfo.id].style.left = playerInfo.x + 'px';
+        players[playerInfo.id].style.top = playerInfo.y + 'px';
+      }
+    });
+
+    // Suppression de l'élément d'un joueur déconnecté
+    socket.on('playerDisconnected', (playerId) => {
+      if (players[playerId]) {
+        players[playerId].remove();
+        delete players[playerId];
+      }
+    });
+
+    // Variables pour gérer le déplacement du joueur
+    let posX = 375;
+    let posY = 275;
+    const speed = 10;
+    const maxX = gameArea.clientWidth - 50;
+    const maxY = gameArea.clientHeight - 50;
+
+    // Détection des touches fléchées pour déplacer le joueur
+    document.addEventListener('keydown', (event) => {
+      switch(event.key) {
+        case "ArrowUp":
+          posY = Math.max(0, posY - speed);
+          break;
+        case "ArrowDown":
+          posY = Math.min(maxY, posY + speed);
+          break;
+        case "ArrowLeft":
+          posX = Math.max(0, posX - speed);
+          break;
+        case "ArrowRight":
+          posX = Math.min(maxX, posX + speed);
+          break;
+      }
+      // Met à jour l'affichage local du joueur
+      if (players[socket.id]) {
+        players[socket.id].style.left = posX + 'px';
+        players[socket.id].style.top = posY + 'px';
+      }
+      // Envoie la nouvelle position au serveur
+      socket.emit('playerMovement', { x: posX, y: posY });
+    });
+  </script>
+</body>
+</html>
